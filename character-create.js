@@ -4,10 +4,8 @@ const REPLACE_STRING = "```html\n<!DOCTYPE html>\r\n<html lang=\"zh-CN\">\r\n<he
 
 function stripHtmlFence(value) {
   return String(value || "")
-    .replace(/^```htmls*
-?/i, "")
-    .replace(/
-?```s*$/i, "");
+    .replace(/^\`\`\`html\s*\n?/i, "")
+    .replace(/\n?\`\`\`\s*$/i, "");
 }
 
 function findRoot() {
