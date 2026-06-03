@@ -1,7 +1,7 @@
 // ==DouluoLockedRegex==
-// @name         [正文]斗罗大陆 I-IV · Soul Land 正文美化 @0.3.1
+// @name         [正文]斗罗大陆 I-IV · Soul Land 正文美化 @0.3.2
 // @module       main-text
-// @version      @0.3.1
+// @version      @0.3.2
 // @build        deterministic
 // @sourceHash   sha256:0f8976ecded0a588e8bcfc2e013d17eeef114369eff0fb9e9ed11212002da7bf
 // ==/DouluoLockedRegex==
