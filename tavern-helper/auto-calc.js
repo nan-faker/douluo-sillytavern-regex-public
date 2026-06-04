@@ -1,6 +1,6 @@
-// @name         [助手]斗罗大陆 I-IV · Soul Land 自动计算脚本 @0.3.3
+// @name         [助手]斗罗大陆 I-IV · Soul Land 自动计算脚本 @0.4
 // @module       tavern-helper/auto-calc
-// @version      @0.3.3
+// @version      @0.4
 // @source       tavern-helper-scripts/auto-calc/dist/latest.json
 "use strict";
 

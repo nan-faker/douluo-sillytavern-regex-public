@@ -1,7 +1,7 @@
 // ==DouluoLockedRegex==
-// @name         [界面]斗罗大陆 I-IV · Soul Land 斗罗魂师档案 · 星海魂导终端 @0.3.3
+// @name         [界面]斗罗大陆 I-IV · Soul Land 斗罗魂师档案 · 星海魂导终端 @0.4
 // @module       character-create
-// @version      @0.3.3
+// @version      @0.4
 // @build        deterministic
 // @sourceHash   sha256:0e0362133836a27f331077e2e7f3d4051bbe02349c0bda150afd799ba0ddfdd1
 // ==/DouluoLockedRegex==
