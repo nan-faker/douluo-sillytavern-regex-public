@@ -1,6 +1,6 @@
-// @name         [助手]斗罗大陆 I-IV · Soul Land 自动计算脚本 @0.4
+// @name         [助手]斗罗大陆 I-IV · Soul Land 自动计算脚本 @0.45
 // @module       tavern-helper/auto-calc
-// @version      @0.4
+// @version      @0.45
 // @source       tavern-helper-scripts/auto-calc/dist/latest.json
 "use strict";
 
@@ -8,7 +8,7 @@
     'use strict';
 
     const SCRIPT_NAME = '斗罗V0.3自动计算脚本';
-    const VERSION = '0.4.2';
+    const VERSION = '0.4.3';
     const STORAGE_KEY = 'douluo_v03_auto_calc_enabled';
 
     const CONFIG = {
@@ -45,6 +45,14 @@
             npcs: '重要NPC档案表',
         },
     };
+
+    const REQUIRED_TEMPLATE_TABLES = Object.freeze(Object.values(CONFIG.tables).flat().filter(Boolean));
+
+    const CORE_RECALC_TABLES = Object.freeze([
+        CONFIG.tables.player,
+        CONFIG.tables.stats,
+        CONFIG.tables.soulOverview,
+    ]);
 
     const QUALITY = [
         { key: '超神级', level: 30, multiplier: 5.0, exp: '500%' },
@@ -213,6 +221,22 @@
             return db.tables.find(t => t && (t.name === tableName || t.uid === tableName)) || null;
         }
         return null;
+    }
+
+    function missingTables(db, tableNames = REQUIRED_TEMPLATE_TABLES) {
+        return tableNames.filter(tableName => !getSheet(db, tableName));
+    }
+
+    function databaseRepairHint(missing) {
+        const listed = missing.slice(0, 6).join('、');
+        const suffix = missing.length > 6 ? ` 等${missing.length}张表` : '';
+        return `数据库模板/同步状态不完整，缺少：${listed}${suffix}。请重新注入最新 24 表 TavernDB 模板，执行数据清洗后调用 refreshDataAndWorldbook()，再手动重算。`;
+    }
+
+    function verifyDatabaseReady(db, tableNames = CORE_RECALC_TABLES) {
+        const missing = missingTables(db, tableNames);
+        if (!missing.length) return { ok: true, missing: [], message: '' };
+        return { ok: false, missing, message: databaseRepairHint(missing) };
     }
 
     function rowToObject(headers, row, rowIndex) {
@@ -1364,7 +1388,13 @@
     async function applyCreationPayload(payload, options = {}) {
         api = getDatabaseApi() || api || await waitForDatabaseApi();
         if (!api || typeof api.updateRow !== 'function') return { ok: false, message: 'AutoCardUpdaterAPI.updateRow unavailable' };
-        const mapping = buildCreationMapping(payload, api.exportTableAsJson ? api.exportTableAsJson() : {});
+        const db = api.exportTableAsJson ? api.exportTableAsJson() : {};
+        const mapping = buildCreationMapping(payload, db);
+        const readiness = verifyDatabaseReady(db, mapping.summary.tables);
+        if (!readiness.ok) {
+            console.warn(`[${SCRIPT_NAME}] ${readiness.message}`, readiness.missing);
+            return { ok: false, message: readiness.message, missingTables: readiness.missing, mapping };
+        }
         const spRemain = Number(mapping.summary.spRemain);
         if (Number.isFinite(spRemain) && spRemain < 0 && !options.force) {
             return { ok: false, message: 'SP 已超支，阻止写入数据库。', mapping };
@@ -1393,9 +1423,10 @@
         const db = dbOverride || (api && typeof api.exportTableAsJson === 'function' ? api.exportTableAsJson() : null);
         const issues = [];
         if (!db) return { ok: false, issues: ['无法读取数据库'] };
-        const required = Object.values(CONFIG.tables).flat().filter(Boolean);
-        for (const tableName of required) {
-            if (!getSheet(db, tableName)) issues.push(`缺少表：${tableName}`);
+        const missing = missingTables(db);
+        if (missing.length) {
+            issues.push(databaseRepairHint(missing));
+            missing.forEach(tableName => issues.push(`缺少表：${tableName}`));
         }
         for (const row of rows(db, CONFIG.tables.traitRules)) {
             const formula = cell(row, '结算参数');
@@ -1492,6 +1523,13 @@
         if (!db) {
             toast('无法导出当前数据库。', 'warning');
             return { ok: false, reason: 'exportTableAsJson failed' };
+        }
+
+        const readiness = verifyDatabaseReady(db);
+        if (!readiness.ok) {
+            console.warn(`[${SCRIPT_NAME}] ${readiness.message}`, readiness.missing);
+            toast(readiness.message, 'warning');
+            return { ok: false, reason: 'database template incomplete', missingTables: readiness.missing };
         }
 
         const inputHash = stableHash({
@@ -1736,6 +1774,9 @@
         previewCreationMapping,
         applyCreationPayload,
         diagnose,
+        checkDatabaseReady: () => verifyDatabaseReady(api && typeof api.exportTableAsJson === 'function' ? api.exportTableAsJson() : null),
+        checkCoreDatabaseReady: () => verifyDatabaseReady(api && typeof api.exportTableAsJson === 'function' ? api.exportTableAsJson() : null, CORE_RECALC_TABLES),
+        checkFullTemplateReady: () => verifyDatabaseReady(api && typeof api.exportTableAsJson === 'function' ? api.exportTableAsJson() : null, REQUIRED_TEMPLATE_TABLES),
         calculateCombat,
         toggleAuto,
         startAuto,
