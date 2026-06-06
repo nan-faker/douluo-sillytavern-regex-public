@@ -1,6 +1,6 @@
-// @name         [助手]斗罗大陆 I-IV · Soul Land 自动计算脚本 @0.45
+// @name         [助手]斗罗大陆 I-IV · Soul Land 自动计算脚本 @0.46
 // @module       tavern-helper/auto-calc
-// @version      @0.45
+// @version      @0.46
 // @source       tavern-helper-scripts/auto-calc/dist/latest.json
 "use strict";
 
@@ -8,8 +8,9 @@
     'use strict';
 
     const SCRIPT_NAME = '斗罗V0.3自动计算脚本';
-    const VERSION = '0.4.3';
+    const VERSION = '0.4.4';
     const STORAGE_KEY = 'douluo_v03_auto_calc_enabled';
+    const EXTREME_ATTACK_MULTIPLIER = 1.5;
 
     const CONFIG = {
         debug: false,
@@ -1176,6 +1177,10 @@
         return asText(soul?.name) || ['第一武魂', '第二武魂', '第三武魂'][index] || `第${index + 1}武魂`;
     }
 
+    function payloadSoulQualityName(soul) {
+        return asText(soul?.qualityName || soul?.quality?.name || soul?.qualityLabel || soul?.quality) || '中级';
+    }
+
     function noteSummary(note) {
         if (!note || typeof note !== 'object') return '';
         return Object.entries(note).filter(([, value]) => asText(value)).map(([key, value]) => `${key}:${asText(value)}`).join(';');
@@ -1189,20 +1194,22 @@
         const ops = [];
         const battle = character.battle || payload?.battle || {};
         const daily = character.daily || payload?.daily || {};
-        const dailyText = Object.entries(daily).map(([key, value]) => `${key}:${value}`).join(';');
+        const dailyLabels = { comprehension: '悟性', presence: '气场', craft: '百工', luck: '气运', knowledge: '学识', experience: '阅历' };
+        const dailyText = Object.entries(daily).map(([key, value]) => `${dailyLabels[key] || key}:${value}`).join(';');
         const level = asText(character.level) || asText(profile.level) || '10';
         const name = asText(character.name) || (payload?.species === 'beast' ? '未命名魂兽' : '未命名魂师');
 
         addMappingOp(db, ops, CONFIG.tables.player, {
             '人物名称': name,
+            '性别': asText(character.gender),
             '年龄/阶段': asText(character.age),
-            '身份/阵营': payload?.species === 'beast' ? `魂兽开局/${payload?.beastForm || ''}` : '人类魂师',
-            '外貌特征': [asText(character.outfit), asText(character.concept)].filter(Boolean).join('；'),
+            '身份/阵营': [payload?.species === 'beast' ? `魂兽开局/${payload?.beastForm || ''}` : '人类魂师', asText(character.profileRole)].filter(Boolean).join(' / '),
+            '外貌特征': [asText(character.profileAppearance), asText(character.outfit), asText(character.concept)].filter(Boolean).join('；'),
             '当前所在主地点': asText(payload?.location),
             '当前子地点': asText(payload?.chapter),
             '魂力等级': level,
-            '当前目标': '开局建档完成，等待第一幕推进',
-            '状态备注': asText(character.concept),
+            '当前目标': asText(character.startingGoal) || '开局建档完成，等待第一幕推进',
+            '状态备注': [asText(character.canonRelation), asText(character.concept)].filter(Boolean).join('；'),
         }, { fallbackIndex: 1 });
 
         addMappingOp(db, ops, CONFIG.tables.stats, {
@@ -1223,16 +1230,17 @@
                 '序号': String(index + 1),
                 '武魂名称': soulName,
                 '主导倾向': asText(soul.dominance),
-                '武魂品级': asText(soul.quality?.name || soul.quality) || '中级',
+                '武魂品级': payloadSoulQualityName(soul),
                 '觉醒状态': soul.unlocked ? '已觉醒' : '未觉醒',
+                '是否极致_脚本': soul.isExtreme ? '是' : '否',
                 '特殊属性': [...(soul.normalAttributes || []), soul.customAttribute, ...(soul.ruleAttributes || [])].filter(Boolean).join('/'),
                 '是否本体武魂': soul.category === '本体武魂' || soul.isBodySoul ? '是' : '否',
                 '本体部位': soul.category === '本体武魂' ? asText(soul.bodyPart) : '',
-                '简介与描述': [asText(soul.appearance), asText(soul.combatStyle)].filter(Boolean).join('；'),
+                '简介与描述': [asText(soul.appearance), asText(soul.combatStyle), soul.isExtreme ? `极致属性=${asText(soul.extremeAttribute) || '待定'}` : ''].filter(Boolean).join('；'),
                 '武魂来源/形态': asText(soul.category || soul.cat),
                 '规则属性': (soul.ruleAttributes || []).join('/'),
                 '限制/代价': asText(soul.costOrLimit),
-                '计算备注': `前端建档;品质对应等级=${soul.innateSoulPower || soul.qualityMappedLevel || ''}`,
+                '计算备注': `前端建档;品质对应等级=${soul.innateSoulPower || soul.qualityMappedLevel || ''};极致属性=${soul.isExtreme ? (asText(soul.extremeAttribute) || '待定') : '否'}`,
             }, { fallbackIndex: index + 1, match: row => Number(cell(row, '序号')) === index + 1 || asText(cell(row, '武魂名称')) === soulName });
         });
 
@@ -1469,6 +1477,97 @@
         return body * 0.85 + soul * 0.15;
     }
 
+    function normalizeCombatAttribute(value) {
+        return asText(value)
+            .replace(/极致之?/g, '')
+            .replace(/属性|元素|攻击|伤害|效果|类型|系/g, '')
+            .replace(/[=：:]/g, '')
+            .trim();
+    }
+
+    function splitCombatAttributes(value) {
+        if (Array.isArray(value)) return value.flatMap(splitCombatAttributes);
+        const text = asText(value);
+        if (!text) return [];
+        return text
+            .split(/[\/,，、;；|]/)
+            .map(normalizeCombatAttribute)
+            .filter(Boolean);
+    }
+
+    function taggedExtremeAttributes(value) {
+        const text = asText(value);
+        if (!text) return [];
+        const out = [];
+        text.replace(/极致属性\s*[=：:]\s*([^;；,，、\/|]+)/g, (_, attr) => {
+            out.push(...splitCombatAttributes(attr));
+            return _;
+        });
+        text.replace(/极致之?([^;；,，、\/|\s]+)/g, (_, attr) => {
+            out.push(...splitCombatAttributes(attr));
+            return _;
+        });
+        return out;
+    }
+
+    function collectExtremeAttributes(source) {
+        const attrs = [];
+        function add(value) { attrs.push(...splitCombatAttributes(value)); }
+        function addTagged(value) { attrs.push(...taggedExtremeAttributes(value)); }
+        if (!source) return attrs;
+        if (typeof source === 'string' || Array.isArray(source)) {
+            addTagged(source);
+            return attrs;
+        }
+        add(source.extremeAttribute);
+        add(source.extremeAttributes);
+        add(source.极致属性);
+        add(source.极致属性列表);
+        addTagged(source.简介与描述);
+        addTagged(source.计算备注);
+        if (source.isExtreme || yes(source.是否极致) || yes(source.是否极致_脚本)) {
+            add(source.特殊属性);
+            add(source.规则属性);
+        }
+        return attrs;
+    }
+
+    function combatTextMatchesAttribute(attribute, text) {
+        const attr = normalizeCombatAttribute(attribute);
+        if (!attr) return false;
+        const haystack = asText(text).replace(/\s+/g, '');
+        if (!haystack) return false;
+        return haystack.includes(attr) || haystack.includes(`极致${attr}`) || haystack.includes(`${attr}属性`);
+    }
+
+    function extremeCombatBonus(input, attacker, attackType, defenseType) {
+        const attrs = Array.from(new Set([
+            ...collectExtremeAttributes(attacker),
+            ...collectExtremeAttributes(input),
+        ]));
+        const targetText = [
+            attackType,
+            defenseType,
+            input.damageType,
+            input.effectType,
+            input.damageElement,
+            input.伤害类型,
+            input.效果类型,
+            input.伤害属性,
+            input['伤害/效果类型'],
+        ].map(asText).filter(Boolean).join(';');
+        const matched = attrs.filter(attr => combatTextMatchesAttribute(attr, targetText));
+        const forced = input.isExtremeAttack || input.极致攻击;
+        const active = matched.length > 0 || yes(forced);
+        return {
+            active,
+            multiplier: active ? EXTREME_ATTACK_MULTIPLIER : 1,
+            attributes: attrs,
+            matched: matched.length ? matched : (active ? ['强制极致攻击'] : []),
+            note: active ? `极致属性命中:${matched.join('/') || '强制'};倍率=${EXTREME_ATTACK_MULTIPLIER}x` : '',
+        };
+    }
+
     function controlResult(ratio) {
         if (ratio <= 0.5) return '无效';
         if (ratio <= 0.75) return '轻微干扰';
@@ -1491,9 +1590,10 @@
         const hit = Number(input.hit ?? 1) || 1;
         const state = Number(input.state ?? 1) || 1;
         const adjustment = Number(input.adjustment ?? 0) || 0;
-        const damage = Math.max(0, round(attackValue * skillMultiplier * resistance * hit * state + adjustment));
+        const extreme = extremeCombatBonus(input, attacker, attackType, defenseType);
+        const damage = Math.max(0, round(attackValue * skillMultiplier * extreme.multiplier * resistance * hit * state + adjustment));
         const controlMultiplier = Number(input.controlMultiplier ?? skillMultiplier) || 1;
-        const controlStrength = attackValue * controlMultiplier * state;
+        const controlStrength = attackValue * controlMultiplier * state * extreme.multiplier;
         const controlResistance = Math.max(1, defenseValue * (Number(input.antiControl ?? 1) || 1));
         const controlRatio = round(controlStrength / controlResistance);
         return {
@@ -1501,6 +1601,7 @@
             defenseType,
             attackValue: round(attackValue),
             defenseValue: round(defenseValue),
+            extreme,
             damage,
             control: {
                 strength: round(controlStrength),
