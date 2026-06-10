@@ -1,3 +1,5 @@
+// 强制清空旧点数记录，强制使用代码默认值
+localStorage.removeItem('acu_data_snapshot_v18_5');
 // @name         [助手]斗罗大陆 I-IV · Soul Land 自动计算脚本 @0.4.7
 // @module       tavern-helper/auto-calc
 // @version      @0.4.7
