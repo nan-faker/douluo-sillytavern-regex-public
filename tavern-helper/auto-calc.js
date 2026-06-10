@@ -21,8 +21,8 @@
             lifeCoef: 1,
             mpGrowth: 10,
             spiritGrowth: 10,
-            baseSp: 100,
-            baseDp: 25,
+            baseSp: 1000000,
+            baseDp: 100,
         },
         tables: {
             player: '玩家状态与信息',
