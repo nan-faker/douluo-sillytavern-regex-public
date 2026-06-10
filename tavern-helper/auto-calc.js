@@ -346,51 +346,50 @@ localStorage.removeItem('acu_data_snapshot_v18_5');
         };
     }
 
-    function parsePointLedger(note) {
-        const match = asText(note).match(/点数成长=等级(\d+);SP累计(\d+);DP累计(\d+)/);
-        return match
-            ? { level: Number(match[1]) || 1, sp: Number(match[2]) || 0, dp: Number(match[3]) || 0 }
-            : { level: 1, sp: 0, dp: 0 };
-    }
+function parsePointLedger(note) {
+    const match = asText(note).match(/点数成长=等级(\d+);SP累计(\d+);DP累计(\d+)/);
+    return match
+        ? { level: Number(match[1]) || 1, sp: Number(match[2]) || 0, dp: Number(match[3]) || 0 }
+        : { level: 1, sp: 0, dp: 0 };
+}
 
-    function readPointRemain(statsRow) {
-        const spText = cell(statsRow, '特性点', '剩余SP', 'SP剩余', 'spRemain');
-        const dpText = cell(statsRow, '红尘点', '剩余DP', 'DP剩余', 'dpRemain');
-        return {
-            sp: num(spText, CONFIG.defaults.baseSp),
-            dp: num(dpText, CONFIG.defaults.baseDp),
-        };
-    }
+function readPointRemain(statsRow) {
+    // 强制设定初始值 SP=1000000  DP=100
+    return {
+        sp: 1000000,
+        dp: 100
+    };
+}
 
-    function pointGrowthState(statsRow, playerRow) {
-        const level = parseLevel(statsRow, playerRow);
-        const remain = readPointRemain(statsRow);
-        const earned = pointGrowthForLevel(level);
-        const ledger = parsePointLedger(cell(statsRow, '计算备注'));
-        const applied = {
-            level: Math.max(ledger.level, earned.level),
-            sp: Math.max(ledger.sp, earned.sp),
-            dp: Math.max(ledger.dp, earned.dp),
-        };
-        const delta = {
-            sp: Math.max(0, earned.sp - ledger.sp),
-            dp: Math.max(0, earned.dp - ledger.dp),
-        };
-        const after = {
-            sp: remain.sp + delta.sp,
-            dp: remain.dp + delta.dp,
-        };
+function pointGrowthState(statsRow, playerRow) {
+    const level = parseLevel(statsRow, playerRow);
+    const remain = readPointRemain(statsRow);
+    const earned = pointGrowthForLevel(level);
+    const ledger = parsePointLedger(cell(statsRow, '计算备注'));
+    const applied = {
+        level: Math.max(ledger.level, earned.level),
+        sp: Math.max(ledger.sp, earned.sp),
+        dp: Math.max(ledger.dp, earned.dp),
+    };
+    const delta = {
+        sp: Math.max(0, earned.sp - ledger.sp),
+        dp: Math.max(0, earned.dp - ledger.dp),
+    };
+    const after = {
+        sp: remain.sp + delta.sp,
+        dp: remain.dp + delta.dp,
+    };
 
-        return {
-            level,
-            remain,
-            earned,
-            applied,
-            delta,
-            after,
-            note: `点数成长=等级${applied.level};SP累计${applied.sp};DP累计${applied.dp};本次+SP${delta.sp}/DP${delta.dp}`,
-        };
-    }
+    return {
+        level,
+        remain,
+        earned,
+        applied,
+        delta,
+        after,
+        note: `点数成长=等级${applied.level};SP累计${applied.sp};DP累计${applied.dp};本次+SP${delta.sp}/DP${delta.dp}`,
+    };
+}
 
     async function getPointState() {
         api = getDatabaseApi() || api || await waitForDatabaseApi();
