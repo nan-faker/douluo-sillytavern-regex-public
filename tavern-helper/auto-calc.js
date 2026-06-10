@@ -1394,20 +1394,23 @@ function pointGrowthState(statsRow, playerRow) {
         }
     }
 
-    async function applyCreationPayload(payload, options = {}) {
-        api = getDatabaseApi() || api || await waitForDatabaseApi();
-        if (!api || typeof api.updateRow !== 'function') return { ok: false, message: 'AutoCardUpdaterAPI.updateRow unavailable' };
-        const db = api.exportTableAsJson ? api.exportTableAsJson() : {};
-        const mapping = buildCreationMapping(payload, db);
-        const readiness = verifyDatabaseReady(db, mapping.summary.tables);
-        if (!readiness.ok) {
-            console.warn(`[${SCRIPT_NAME}] ${readiness.message}`, readiness.missing);
-            return { ok: false, message: readiness.message, missingTables: readiness.missing, mapping };
-        }
-        const spRemain = Number(mapping.summary.spRemain);
-        if (Number.isFinite(spRemain) && spRemain < 0 && !options.force) {
-            return { ok: false, message: 'SP 已超支，阻止写入数据库。', mapping };
-        }
+async function applyCreationPayload(payload, options = {}) {
+    api = getDatabaseApi() || api || await waitForDatabaseApi();
+    if (!api || typeof api.updateRow !== 'function') return { ok: false, message: 'AutoCardUpdaterAPI.updateRow unavailable' };
+    const db = api.exportTableAsJson ? api.exportTableAsJson() : {};
+    const mapping = buildCreationMapping(payload, db);
+    const readiness = verifyDatabaseReady(db, mapping.summary.tables);
+    if (!readiness.ok) {
+        console.warn(`[${SCRIPT_NAME}] ${readiness.message}`, readiness.missing);
+        return { ok: false, message: readiness.message, missingTables: readiness.missing, mapping };
+    }
+    const spRemain = Number(mapping.summary.spRemain);
+    // 屏蔽SP负数拦截，允许负数正常写入数据库
+    /*
+    if (Number.isFinite(spRemain) && spRemain < 0 && !options.force) {
+        return { ok: false, message: 'SP 已超支，阻止写入数据库。', mapping };
+    }
+    */
         const missing = [];
         for (const op of mapping.ops) {
             if (op.rowIndex) {
@@ -1747,7 +1750,7 @@ function pointGrowthState(statsRow, playerRow) {
             const scale = battleScale(finalCalc.final.body, finalCalc.final.soul, finalCalc.final.mind);
             const pointState = pointGrowthState(statsRow, playerRow);
 
-            const statsUpdate = {
+const statsUpdate = {
                 '魂力等级': String(level),
                 '魂师境界': soulRealm(level),
                 '精神力境界_脚本': realm,
