@@ -1219,11 +1219,10 @@ function pointGrowthState(statsRow, playerRow) {
             '魂力_基础': String(battle.soulPower ?? battle.soul ?? 1),
             '精神_基础': String(battle.spirit ?? battle.mind ?? 1),
             '日常六维与调整值': dailyText,
-            '特性点': String(pointBuy.remain ?? pointBuy.spRemain ?? CONFIG.defaults.baseSp),
-            '红尘点': String(pointBuy.dpRemain ?? CONFIG.defaults.baseDp),
+            '特性点': "1000000",
+            '红尘点': "100",
             '自动计算锁定': '否',
-            '计算备注': `前端建档;SP剩余=${pointBuy.remain ?? pointBuy.spRemain ?? CONFIG.defaults.baseSp};DP剩余=${pointBuy.dpRemain ?? CONFIG.defaults.baseDp}`,
-        }, { fallbackIndex: 1 });
+            '计算备注': `前端建档;SP剩余=1000000;DP剩余=100`}, { fallbackIndex: 1 });
 
         (character.souls || []).slice(0, 3).forEach((soul, index) => {
             const soulName = payloadSoulName(soul, index);
